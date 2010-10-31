@@ -34,7 +34,9 @@ typedef struct {
   uint64_t        access_count;
   uint64_t        free_memory;
   uint64_t        total_memory;
+  uint64_t        average_item_length;
   uint32_t        hash_table_size;
+  lru_cache_item  *free_items;
   pthread_mutex_t *mutex;
 } lru_cache;
 

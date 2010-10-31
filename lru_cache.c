@@ -9,7 +9,7 @@
 // ------------------------------------------
 // MurmurHash2, by Austin Appleby
 // http://sites.google.com/site/murmurhash/
-uint32_t lru_cache_key_to_hash(lru_cache *cache, void *key, uint32_t key_length) {
+uint32_t lru_cache_hash(lru_cache *cache, void *key, uint32_t key_length) {
 	uint32_t m = 0x5bd1e995;
 	uint32_t r = 24;
 	uint32_t h = cache->access_count ^ key_length;
@@ -36,17 +36,39 @@ uint32_t lru_cache_key_to_hash(lru_cache *cache, void *key, uint32_t key_length)
 	h ^= h >> 13;
 	h *= m;
 	h ^= h >> 15;
-
-	return h;
+	return h % cache->hash_table_size;
 }
 
 // compare a key against an existing item's key
 int lru_cache_cmp_keys(lru_cache_item *item, void *key, uint32_t key_length) {
-  if(key_length != item->key_length) {
+  if(key_length != item->key_length)
     return 1;
-  } else {
+  else
     return memcmp(key, item->key, key_length);
+}
+
+// remove the least recently used item
+// TODO: we can optimise this by finding the n lru items, where n = required_space / average_length
+void lru_cache_remove_lru_item(lru_cache *cache) {
+  uint32_t i = 0, index = -1;
+  uint64_t access_count = -1;
+  
+  for(; i < cache->hash_table_size; i++) {
+    
   }
+}
+
+// remove an item and push it to the free items queue
+void lru_cache_remove_item(lru_cache *cache, lru_cache_item *prev, lru_cache_item *item, uint32_t hash_index) {
+  if(prev)
+    prev->next = item->next;
+  else
+    cache->items[hash_index] = (lru_cache_item *) item->next;
+  
+  // push the item to the free items queue
+  memset(item, 0, sizeof(lru_cache_item));
+  item->next = (struct lru_cache_item *) cache->free_items;
+  cache->free_items = item;
 }
 
 // error helpers
@@ -67,19 +89,21 @@ int lru_cache_cmp_keys(lru_cache_item *item, void *key, uint32_t key_length) {
   return LRU_CACHE_PTHREAD_ERROR;\
 }
 
+
 // ------------------------------------------
 // public api
 // ------------------------------------------
-lru_cache *lru_cache_new(uint64_t max_size, uint32_t average_size) {
+lru_cache *lru_cache_new(uint64_t cache_size, uint32_t average_length) {
   // create the cache
   lru_cache *cache = (lru_cache *) calloc(sizeof(lru_cache), 1);
   if(!cache) {
     perror("LRU Cache unable to create cache object");
     return NULL;
   }
-  cache->hash_table_size  = max_size / average_size;
-  cache->free_memory      = max_size;
-  cache->total_memory     = max_size;
+  cache->hash_table_size      = cache_size / average_length;
+  cache->average_item_length  = average_length;
+  cache->free_memory          = cache_size;
+  cache->total_memory         = cache_size;
   
   // size the hash table to a guestimate of the number of slots required (assuming a perfect hash)
   cache->items = (lru_cache_item **) calloc(sizeof(lru_cache_item *), cache->hash_table_size);
@@ -89,7 +113,7 @@ lru_cache *lru_cache_new(uint64_t max_size, uint32_t average_size) {
     return NULL;
   }
   
-  // a mutex is used so the cache can be thread safe
+  // all cache calls are guarded by a mutex
   cache->mutex = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t));
   if(pthread_mutex_init(cache->mutex, NULL)) {
     perror("LRU Cache unable to initialise mutex");
@@ -139,10 +163,9 @@ lru_cache_error lru_cache_set(lru_cache *cache, void *key, uint32_t key_length, 
   test_for_value_too_large();
   lock_cache();
   
-  // if we don't have enough space available for this value, remove the oldest items until we do
-  while(cache->free_memory < value_length) {
-    
-  }
+  // if we don't have enough space available for this value, repeatedly remove the oldest item until we do
+  while(cache->free_memory < value_length)
+    lru_cache_remove_lru_item(cache);
   
   unlock_cache();
   return LRU_CACHE_NO_ERROR;
@@ -155,14 +178,12 @@ lru_cache_error lru_cache_get(lru_cache *cache, void *key, uint32_t key_length, 
   lock_cache();
   
   // loop until we find the item, or hit the end of a chain
-  uint32_t hash = lru_cache_key_to_hash(cache, key, key_length);
-  lru_cache_item *item = cache->items[hash % cache->hash_table_size];
+  uint32_t hash_index = lru_cache_hash(cache, key, key_length);
+  lru_cache_item *item = cache->items[hash_index];
   
-  while(item && lru_cache_cmp_keys(item, key, key_length)) {
+  while(item && lru_cache_cmp_keys(item, key, key_length))
     item = (lru_cache_item *) item->next;
-  }
   
-  // if we found the item, update the access counters
   if(item) {
     *value = item->value;
     item->access_count = ++cache->access_count;
@@ -182,12 +203,16 @@ lru_cache_error lru_cache_delete(lru_cache *cache, void *key, uint32_t key_lengt
   
   // loop until we find the item, or hit the end of a chain
   lru_cache_item *item = NULL, *prev = NULL;
-  uint32_t hash = lru_cache_key_to_hash(cache, key, key_length);
-  item = cache->items[hash % cache->hash_table_size];
+  uint32_t hash_index = lru_cache_hash(cache, key, key_length);
+  item = cache->items[hash_index];
   
   while(item && lru_cache_cmp_keys(item, key, key_length)) {
     prev = item;
     item = (lru_cache_item *) item->next;
+  }
+  
+  if(item) {
+    lru_cache_remove_item(cache, prev, item, hash_index);
   }
   
   unlock_cache();
