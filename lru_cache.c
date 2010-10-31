@@ -54,7 +54,12 @@ void lru_cache_remove_item(lru_cache *cache, lru_cache_item *prev, lru_cache_ite
   else
     cache->items[hash_index] = (lru_cache_item *) item->next;
   
-  // push the item to the free items queue
+  // free memory and update the free memory counter
+  cache->free_memory += item->value_length;
+  free(item->value);
+  free(item->key);
+  
+  // push the item to the free items queue  
   memset(item, 0, sizeof(lru_cache_item));
   item->next = (struct lru_cache_item *) cache->free_items;
   cache->free_items = item;
@@ -194,9 +199,44 @@ lru_cache_error lru_cache_set(lru_cache *cache, void *key, uint32_t key_length, 
   test_for_value_too_large();
   lock_cache();
   
-  // if we don't have enough space available for this value, repeatedly remove the oldest item until we do
-  while(cache->free_memory < value_length)
-    lru_cache_remove_lru_item(cache);
+  // see if the key already exists
+  uint32_t hash_index = lru_cache_hash(cache, key, key_length), required = 0;
+  lru_cache_item *item = NULL, *prev = NULL;
+  item = cache->items[hash_index];
+  
+  while(item && lru_cache_cmp_keys(item, key, key_length)) {
+    prev = item;
+    item = (lru_cache_item *) item->next;
+  }
+  
+  if(item) {
+    // update the value and value_lengths
+    required = value_length - item->value_length;
+    free(item->value);
+    item->value = value;
+    item->value_length = value_length;
+    
+  } else {
+    // insert a new item
+    item = lru_cache_pop_or_create_item(cache);
+    item->value = value;
+    item->key = key;
+    item->value_length = value_length;
+    item->key_length = key_length;
+    required = value_length;
+    
+    if(prev)
+      prev->next = item;
+    else
+      cache->items[hash_index] = item;
+  }
+  
+  // remove as many items as necessary to free enough space
+  if(required > 0) {
+    while(cache->free_memory < required)
+      lru_cache_remove_lru_item(cache);
+  }
+  cache->free_memory -= required;
   
   unlock_cache();
   return LRU_CACHE_NO_ERROR;
