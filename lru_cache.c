@@ -47,17 +47,6 @@ int lru_cache_cmp_keys(lru_cache_item *item, void *key, uint32_t key_length) {
     return memcmp(key, item->key, key_length);
 }
 
-// remove the least recently used item
-// TODO: we can optimise this by finding the n lru items, where n = required_space / average_length
-void lru_cache_remove_lru_item(lru_cache *cache) {
-  uint32_t i = 0, index = -1;
-  uint64_t access_count = -1;
-  
-  for(; i < cache->hash_table_size; i++) {
-    
-  }
-}
-
 // remove an item and push it to the free items queue
 void lru_cache_remove_item(lru_cache *cache, lru_cache_item *prev, lru_cache_item *item, uint32_t hash_index) {
   if(prev)
@@ -69,6 +58,48 @@ void lru_cache_remove_item(lru_cache *cache, lru_cache_item *prev, lru_cache_ite
   memset(item, 0, sizeof(lru_cache_item));
   item->next = (struct lru_cache_item *) cache->free_items;
   cache->free_items = item;
+}
+
+// remove the least recently used item
+// TODO: we can optimise this by finding the n lru items, where n = required_space / average_length
+void lru_cache_remove_lru_item(lru_cache *cache) {
+  lru_cache_item *min_item = NULL, *min_prev = NULL;
+  lru_cache_item *item = NULL, *prev = NULL;
+  uint32_t i = 0, min_index = -1;
+  uint64_t min_access_count = -1;
+  
+  for(; i < cache->hash_table_size; i++) {
+    item = cache->items[i];
+    prev = NULL;
+    
+    while(item) {
+      if(item->access_count < min_access_count || min_access_count == -1) {
+        min_access_count = item->access_count;
+        min_item  = item;
+        min_prev  = prev;
+        min_index = i;
+      }
+      prev = item;
+      item = item->next;
+    }
+  }
+  
+  if(min_item)
+    lru_cache_remove_item(cache, min_prev, min_item, min_index);
+}
+
+// pop an existing item off the free queue, or create a new one
+lru_cache_item *lru_cache_pop_or_create_item(lru_cache *cache) {
+  lru_cache_item *item = NULL;
+  
+  if(cache->free_items) {
+    item = cache->free_items;
+    cache->free_items = item->next;
+  } else {
+    item = (lru_cache_item *) calloc(sizeof(lru_cache_item), 1);
+  }
+  
+  return item;
 }
 
 // error helpers

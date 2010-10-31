@@ -26,7 +26,7 @@ typedef struct {
   uint32_t  value_length;
   uint32_t  key_length;
   uint64_t  access_count;
-  struct lru_cache_item *next;
+  void      *next;
 } lru_cache_item;
 
 typedef struct {
