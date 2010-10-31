@@ -1,0 +1,32 @@
+= C LRU Cache
+A simple least recently used cache written in C.
+
+== Usage
+Select a maximum size for the cache to grow to (e.g 60MB), determine the average size of items in the cache (a guess is OK), then use the cache using five functions:
+
+	// cache size, and hypothetical item
+	#define MAX_SIZE (60 * 1024 * 1024)
+	#define AVG_SIZE (2 * 1024)
+	void *key = (void *)"test";
+	int   key_length = 4;
+	void  *item = (void *)"value";
+	int   item_length = 5;
+	
+	// create a new cache
+	lru_cache *cache = lru_cache_new(MAX_SIZE, AVG_SIZE);
+	
+	// set an item
+	lru_cache_set(cache, key, key_length, item, item_length);
+	
+	// get an item
+	lru_cache_get(cache, key, key_length, &item);
+	
+	// delete an item
+	lru_cache_delete(cache, key, key_length);
+	
+	// free a cache
+	lru_cache_free(cache);
+
+
+== Implementation
+There are no external dependencies.
