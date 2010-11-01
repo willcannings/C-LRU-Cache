@@ -10,33 +10,33 @@
 // MurmurHash2, by Austin Appleby
 // http://sites.google.com/site/murmurhash/
 uint32_t lru_cache_hash(lru_cache *cache, void *key, uint32_t key_length) {
-	uint32_t m = 0x5bd1e995;
-	uint32_t r = 24;
-	uint32_t h = cache->access_count ^ key_length;
-	char* data = (char *)key;
+  uint32_t m = 0x5bd1e995;
+  uint32_t r = 24;
+  uint32_t h = cache->seed ^ key_length;
+  char* data = (char *)key;
 
-	while(key_length >= 4) {
+  while(key_length >= 4) {
     uint32_t k = *(uint32_t *)data;
-		k *= m;
-		k ^= k >> r;
-		k *= m;
-		h *= m;
-		h ^= k;
-		data += 4;
-		key_length -= 4;
-	}
-	
-	switch(key_length) {
-  	case 3: h ^= data[2] << 16;
-  	case 2: h ^= data[1] << 8;
-  	case 1: h ^= data[0];
-  	        h *= m;
-	};
+    k *= m;
+    k ^= k >> r;
+    k *= m;
+    h *= m;
+    h ^= k;
+    data += 4;
+    key_length -= 4;
+  }
+  
+  switch(key_length) {
+    case 3: h ^= data[2] << 16;
+    case 2: h ^= data[1] << 8;
+    case 1: h ^= data[0];
+            h *= m;
+  };
 
-	h ^= h >> 13;
-	h *= m;
-	h ^= h >> 15;
-	return h % cache->hash_table_size;
+  h ^= h >> 13;
+  h *= m;
+  h ^= h >> 15;
+  return h % cache->hash_table_size;
 }
 
 // compare a key against an existing item's key
@@ -140,6 +140,7 @@ lru_cache *lru_cache_new(uint64_t cache_size, uint32_t average_length) {
   cache->average_item_length  = average_length;
   cache->free_memory          = cache_size;
   cache->total_memory         = cache_size;
+  cache->seed                 = time(NULL);
   
   // size the hash table to a guestimate of the number of slots required (assuming a perfect hash)
   cache->items = (lru_cache_item **) calloc(sizeof(lru_cache_item *), cache->hash_table_size);
@@ -230,14 +231,14 @@ lru_cache_error lru_cache_set(lru_cache *cache, void *key, uint32_t key_length, 
     else
       cache->items[hash_index] = item;
   }
+  item->access_count = ++cache->access_count;
   
   // remove as many items as necessary to free enough space
-  if(required > 0) {
+  if(required > 0 && required > cache->free_memory) {
     while(cache->free_memory < required)
       lru_cache_remove_lru_item(cache);
   }
   cache->free_memory -= required;
-  
   unlock_cache();
   return LRU_CACHE_NO_ERROR;
 }
