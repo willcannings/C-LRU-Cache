@@ -1,8 +1,8 @@
-#include "lru_cache.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <err.h>
+#include "lruc.h"
 
 #define CACHE_SIZE  (8 * 1024)  // 8k
 #define AVG_SIZE    (2 * 1024)  // 2k
@@ -23,13 +23,13 @@ char *values[5] = {
   "four"  
 };
 
-void copy_key_val(lru_cache *cache, char *key, char *val) {
+void copy_key_val(lruc *cache, char *key, char *val) {
   int error = 0;
   char *new_key = (char *) malloc(strlen(key) + 1);
   strcpy(new_key, key);
   char *new_val = (char *) malloc(strlen(val) + 1);
   strcpy(new_val, val);
-  if(error = lru_cache_set(cache, new_key, strlen(key) + 1, new_val, AVG_SIZE))
+  if(error = lruc_set(cache, new_key, strlen(key) + 1, new_val, AVG_SIZE))
     errx(1, "Error in set: %i\n", error);
 }
 
@@ -39,7 +39,7 @@ int main(void) {
   
   // create a new cache
   printf("Creating a cache\n");
-  lru_cache *cache = lru_cache_new(CACHE_SIZE, AVG_SIZE);
+  lruc *cache = lruc_new(CACHE_SIZE, AVG_SIZE);
   
   // stress test inserting the five values 1000 times
   printf("Setting values\n");
@@ -50,7 +50,7 @@ int main(void) {
   printf("Getting values\n");
   for(i = 4; i >= 0; i--) {
     printf("Getting: %s\n", keys[i]);
-    if(error = lru_cache_get(cache, keys[i], strlen(keys[i]) + 1, (void **)(&get)))
+    if(error = lruc_get(cache, keys[i], strlen(keys[i]) + 1, (void **)(&get)))
       errx(1, "Error in get: %i\n", error);
 
     if(get)
@@ -60,6 +60,6 @@ int main(void) {
   }
   
   printf("Freeing the cache\n");
-  if(error = lru_cache_free(cache))
+  if(error = lruc_free(cache))
     errx(1, "Error in free: %i\n", error);
 }
