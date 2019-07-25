@@ -26,19 +26,31 @@ typedef struct {
   void      *key;
   uint32_t  value_length;
   uint32_t  key_length;
-  uint64_t  access_count;
   void      *next;
+  void      *node;
 } lruc_item;
+
+typedef struct QNode {
+    lruc_item *item;
+    struct QNode *prev;
+    struct QNode *next;
+} QNode;
+
+typedef struct dqueue {
+    QNode *front;
+    QNode *rear;
+    uint32_t filled_count;
+} dqueue;
 
 typedef struct {
   lruc_item **items;
-  uint64_t  access_count;
   uint64_t  free_memory;
   uint64_t  total_memory;
   uint64_t  average_item_length;
   uint32_t  hash_table_size;
   time_t    seed;
   lruc_item *free_items;
+  dqueue *queue;
   pthread_mutex_t *mutex;
 } lruc;
 
