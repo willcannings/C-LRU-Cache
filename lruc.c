@@ -14,7 +14,7 @@ uint32_t lruc_hash(lruc *cache, void *key, uint32_t key_length) {
     uint32_t m = 0x5bd1e995;
     uint32_t r = 24;
     uint32_t h = cache->seed ^ key_length;
-    char* data = (char *)key;
+    char *data = (char *)key;
 
     while (key_length >= 4) {
         uint32_t k = *(uint32_t *)data;
@@ -31,7 +31,7 @@ uint32_t lruc_hash(lruc *cache, void *key, uint32_t key_length) {
         case 3: h ^= data[2] << 16;
         case 2: h ^= data[1] << 8;
         case 1: h ^= data[0];
-        h *= m;
+                h *= m;
     };
 
     h ^= h >> 13;
