@@ -19,6 +19,7 @@ static LIST_HEAD(lru_list);
 static uint32_t free_memory, seed;
 //create hash table includes hash_table_size slots.
 DEFINE_HASHTABLE(htable, 12);
+DEFINE_MUTEX(cache_lock);
 
 struct lru_node {
     void *hash_table_node;
@@ -106,6 +107,7 @@ void lruc_get(void *key, uint32_t key_length, void **value) {
     uint32_t id = lruc_hash(key, key_length);
 
     struct hash_node *obj;
+    mutex_lock(&cache_lock);
     hash_for_each_possible(htable, obj, node, id) {
         //key exist already
         if (obj->key_length == key_length && !memcmp(obj->key, key, key_length)) {
@@ -115,6 +117,7 @@ void lruc_get(void *key, uint32_t key_length, void **value) {
             return;
         }
     }
+    mutex_unlock(&cache_lock);
 
     *value = NULL;
 }
@@ -127,6 +130,8 @@ void lruc_set(void *key, uint32_t key_length, void *value, uint32_t value_length
     struct hash_node *obj;
     struct lru_node *lru_obj;
     void *k, *v;
+
+    mutex_lock(&cache_lock);
     hash_for_each_possible(htable, obj, node, id) {
         //key exist already
         if (obj->key_length == key_length && !memcmp(obj->key, key, key_length)) {
@@ -181,6 +186,8 @@ void lruc_set(void *key, uint32_t key_length, void *value, uint32_t value_length
             }
         }
     }
+
+    mutex_unlock(&cache_lock);
 
     free_memory -= required;
 }
