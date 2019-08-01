@@ -114,6 +114,7 @@ void lruc_get(void *key, uint32_t key_length, void **value) {
             //reference the double list node
             *value = obj->value;
             list_move_tail(&obj->list_node->list, &lru_list);
+            mutex_unlock(&cache_lock);
             return;
         }
     }
@@ -183,6 +184,9 @@ void lruc_set(void *key, uint32_t key_length, void *value, uint32_t value_length
                 free_memory += obj->key_length;
                 free_memory += obj->value_length;
                 hash_del(&obj->node);
+
+                kfree(lru_obj);
+                kfree(obj);
             }
         }
     }
